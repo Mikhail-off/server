@@ -33,3 +33,7 @@ try:
     from ._kservegrpc import KServeGrpc
 except ImportError:
     pass
+try:
+    from ._metrics import Metrics
+except ImportError:
+    pass
