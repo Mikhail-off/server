@@ -728,6 +728,7 @@ ModelStreamInferHandler::StreamInferResponseComplete(
     }
 
     if (state->is_decoupled_) {
+      std::lock_guard<std::recursive_mutex> lk1(state->context_->mu_);
       if (response) {
         state->response_queue_->MarkNextResponseComplete();
       }
@@ -735,14 +736,14 @@ ModelStreamInferHandler::StreamInferResponseComplete(
         state->step_ = Steps::WRITEREADY;
         state->context_->PutTaskBackToQueue(state);
       }
+      state->complete_ = is_complete;
     } else {
       state->step_ = Steps::WRITEREADY;
       if (is_complete) {
         state->context_->WriteResponseIfReady(state);
       }
+      state->complete_ = is_complete;
     }
-
-    state->complete_ = is_complete;
   }
 }
 
