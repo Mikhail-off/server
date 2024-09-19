@@ -469,27 +469,25 @@ ModelStreamInferHandler::Process(InferHandler::State* state, bool rpc_ok)
         state->context_->finish_ok_ = false;
       }
 
-      {
-        // Finish the state if all the transactions associated with
-        // the state have completed.
-        std::lock_guard<std::recursive_mutex> lk1(state->context_->mu_);
-        if (state->IsComplete()) {
-          state->context_->DecrementRequestCounter();
-          finished = Finish(state);
-        } else {
-          std::lock_guard<std::recursive_mutex> lock(state->step_mtx_);
+      // Finish the state if all the transactions associated with
+      // the state have completed.
+      std::lock_guard<std::recursive_mutex> lk1(state->context_->mu_);      
+      if (state->IsComplete()) {
+        state->context_->DecrementRequestCounter();
+        finished = Finish(state);
+      } else {
+        std::lock_guard<std::recursive_mutex> lock(state->step_mtx_);
 
-          // If there is an available response to be written
-          // to the stream, then transition directly to WRITEREADY
-          // state and enqueue itself to the completion queue to be
-          // taken up later. Otherwise, go to ISSUED state and wait
-          // for the callback to make a response available.
-          if (state->response_queue_->HasReadyResponse()) {
-            state->step_ = Steps::WRITEREADY;
-            state->context_->PutTaskBackToQueue(state);
-          } else {
-            state->step_ = Steps::ISSUED;
-          }
+        // If there is an available response to be written
+        // to the stream, then transition directly to WRITEREADY
+        // state and enqueue itself to the completion queue to be
+        // taken up later. Otherwise, go to ISSUED state and wait
+        // for the callback to make a response available.
+        if (state->response_queue_->HasReadyResponse()) {
+          state->step_ = Steps::WRITEREADY;
+          state->context_->PutTaskBackToQueue(state);
+        } else {
+          state->step_ = Steps::ISSUED;
         }
       }
     } else if (state->step_ == Steps::WRITEREADY) {
@@ -503,25 +501,23 @@ ModelStreamInferHandler::Process(InferHandler::State* state, bool rpc_ok)
             std::chrono::milliseconds(state->delay_response_ms_));
       }
 
-      {
-        // Finish the state if all the transactions associated with
-        // the state have completed.
-        std::lock_guard<std::recursive_mutex> lk1(state->context_->mu_);
-        if (state->IsComplete()) {
-          state->context_->DecrementRequestCounter();
-          finished = Finish(state);
+      // Finish the state if all the transactions associated with
+      // the state have completed.
+      std::lock_guard<std::recursive_mutex> lk1(state->context_->mu_);
+      if (state->IsComplete()) {
+        state->context_->DecrementRequestCounter();
+        finished = Finish(state);
+      } else {
+        // GRPC doesn't allow to issue another write till
+        // the notification from previous write has been
+        // delivered. If there is an ongoing write then
+        // defer writing and place the task at the back
+        // of the completion queue to be taken up later.
+        if (!state->context_->ongoing_write_) {
+          state->context_->ongoing_write_ = true;
+          state->context_->DecoupledWriteResponse(state);
         } else {
-          // GRPC doesn't allow to issue another write till
-          // the notification from previous write has been
-          // delivered. If there is an ongoing write then
-          // defer writing and place the task at the back
-          // of the completion queue to be taken up later.
-          if (!state->context_->ongoing_write_) {
-            state->context_->ongoing_write_ = true;
-            state->context_->DecoupledWriteResponse(state);
-          } else {
-            state->context_->PutTaskBackToQueue(state);
-          }
+          state->context_->PutTaskBackToQueue(state);
         }
       }
     }
