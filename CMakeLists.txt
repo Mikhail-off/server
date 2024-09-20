@@ -128,9 +128,9 @@ FetchContent_Declare(
 set(LIB_DIR "lib")
 if(LINUX)
   file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
-  if(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
+  if(${DISTRO_ID_LIKE} MATCHES "rhel|centos|fedora")
     set (LIB_DIR "lib64")
-  endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
+  endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos|fedora")
 endif(LINUX)
 set(TRITON_CORE_HEADERS_ONLY OFF)
 
